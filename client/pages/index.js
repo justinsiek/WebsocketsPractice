@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import io from 'socket.io-client';
 
 function Index() {
@@ -9,6 +9,11 @@ function Index() {
   const [isUsernameSet, setIsUsernameSet] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState([]);
   const [inviteUsername, setInviteUsername] = useState('');
+  const [invite, setInvite] = useState(null);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [roomUsers, setRoomUsers] = useState([]);
+  const [defaultRoomUsers, setDefaultRoomUsers] = useState([]);
+  const [currentRoomUsers, setCurrentRoomUsers] = useState([]);
 
   useEffect(() => {
     const newSocket = io('http://localhost:8080'); //REMEMBER TO CHANGE THIS WHEN CONNECTING TO INTERNET
@@ -20,28 +25,47 @@ function Index() {
 
     newSocket.on('user_list', (users) => {
       setConnectedUsers(users);
+      setDefaultRoomUsers(users);
+    });
+
+    newSocket.on('room_users', (users) => {
+      setRoomUsers(users);
+      setCurrentRoomUsers(users);
     });
 
     newSocket.on('receive_invite', (data) => {
-      alert(`You received an invite from ${data.inviter}`);
+      setInvite(data);
     });
 
-    newSocket.on('invite_error', (data) => {
-      alert(data.message);
+    newSocket.on('join_room', (data) => {
+      setCurrentRoom(data.room);
+      setMessages([]); // Clear messages when joining a new room
+    });
+
+    newSocket.on('invite_accepted', (data) => {
+      setCurrentRoom(data.room);
+      setMessages([]); // Clear messages when starting a new chat
+    });
+
+    newSocket.on('invite_rejected', (data) => {
+      // Handle rejected invite (e.g., show a message to the user)
     });
 
     return () => {
       newSocket.off('message');
       newSocket.off('user_list');
+      newSocket.off('room_users');
       newSocket.off('receive_invite');
-      newSocket.off('invite_error');
+      newSocket.off('join_room');
+      newSocket.off('invite_accepted');
+      newSocket.off('invite_rejected');
       newSocket.close();
     };
   }, []);
 
   const sendMessage = () => {
     if (inputMessage.trim() !== '' && socket && isUsernameSet) {
-      socket.emit('message', { message: inputMessage, username: username });
+      socket.emit('message', { message: inputMessage, username: username, room: currentRoom });
       setInputMessage('');
     }
   };
@@ -59,6 +83,13 @@ function Index() {
       setInviteUsername('');
     }
   };
+
+  const handleInviteResponse = useCallback((accepted) => {
+    if (socket && invite) {
+      socket.emit('invite_response', { inviter: invite.inviter, accepted });
+      setInvite(null);
+    }
+  }, [socket, invite]);
 
   if (!isUsernameSet) {
     return (
@@ -81,12 +112,14 @@ function Index() {
   }
 
   return (
-    <div className='flex justify-center items-center h-screen'>
+    <div className='flex justify-center items-center h-screen relative'>
       <div className='border border-gray-300 rounded-lg overflow-y-auto mr-4 p-4'>
         <h2 className='font-bold mb-2'>Username: {username}</h2>
-        <h2 className='font-bold mb-2'>Connected Users:</h2>
+        <h2 className='font-bold mb-2'>
+          {currentRoom ? 'Users in Room:' : 'Users in Default Room:'}
+        </h2>
         <ul>
-          {connectedUsers.map((user, index) => (
+          {(currentRoom ? currentRoomUsers : defaultRoomUsers).map((user, index) => (
             <li key={index}>{user}</li>
           ))}
         </ul>
@@ -128,6 +161,25 @@ function Index() {
           </button>
         </div>
       </div>
+      {invite && (
+        <div className='absolute bottom-4 right-4 bg-white border border-gray-300 rounded-lg p-4 shadow-lg'>
+          <p className='mb-2'>You received an invite from {invite.inviter}</p>
+          <div className='flex justify-end'>
+            <button
+              className='bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2'
+              onClick={() => handleInviteResponse(true)}
+            >
+              Accept
+            </button>
+            <button
+              className='bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded'
+              onClick={() => handleInviteResponse(false)}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
