@@ -34,6 +34,16 @@ def handle_message(message):
     emit('message', formatted_message, broadcast=True)
     print(connected_users.keys())
 
+@socketio.on('send_invite')
+def handle_send_invite(data):
+    inviter = data['inviter']
+    invitee = data['invitee']
+    if invitee in connected_users:
+        invitee_sid = connected_users[invitee]
+        emit('receive_invite', {'inviter': inviter}, room=invitee_sid)
+    else:
+        emit('invite_error', {'message': f"User {invitee} not found"}, room=connected_users[inviter])
+
 
 if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=8080)

@@ -8,6 +8,7 @@ function Index() {
   const [username, setUsername] = useState('');
   const [isUsernameSet, setIsUsernameSet] = useState(false);
   const [connectedUsers, setConnectedUsers] = useState([]);
+  const [inviteUsername, setInviteUsername] = useState('');
 
   useEffect(() => {
     const newSocket = io('http://localhost:8080'); //REMEMBER TO CHANGE THIS WHEN CONNECTING TO INTERNET
@@ -21,9 +22,19 @@ function Index() {
       setConnectedUsers(users);
     });
 
+    newSocket.on('receive_invite', (data) => {
+      alert(`You received an invite from ${data.inviter}`);
+    });
+
+    newSocket.on('invite_error', (data) => {
+      alert(data.message);
+    });
+
     return () => {
       newSocket.off('message');
       newSocket.off('user_list');
+      newSocket.off('receive_invite');
+      newSocket.off('invite_error');
       newSocket.close();
     };
   }, []);
@@ -39,6 +50,13 @@ function Index() {
     if (username.trim() !== '' && socket) {
       socket.emit('set_username', username);
       setIsUsernameSet(true);
+    }
+  };
+
+  const sendInvite = () => {
+    if (inviteUsername.trim() !== '' && socket) {
+      socket.emit('send_invite', { inviter: username, invitee: inviteUsername });
+      setInviteUsername('');
     }
   };
 
@@ -65,6 +83,7 @@ function Index() {
   return (
     <div className='flex justify-center items-center h-screen'>
       <div className='border border-gray-300 rounded-lg overflow-y-auto mr-4 p-4'>
+        <h2 className='font-bold mb-2'>Username: {username}</h2>
         <h2 className='font-bold mb-2'>Connected Users:</h2>
         <ul>
           {connectedUsers.map((user, index) => (
@@ -77,6 +96,21 @@ function Index() {
           {messages.map((msg, index) => (
             <p key={index}>{msg}</p>
           ))}
+        </div>
+        <div className='flex mt-4'>
+          <input
+            className='border border-gray-400 p-2 flex-grow rounded-l-lg'
+            type="text"
+            value={inviteUsername}
+            onChange={(e) => setInviteUsername(e.target.value)}
+            placeholder="Enter username to invite..."
+            onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
+          />
+          <button
+            className='bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-r-lg'
+            onClick={sendInvite}>
+            Invite
+          </button>
         </div>
         <div className='flex'>
           <input
